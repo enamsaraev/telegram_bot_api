@@ -1,5 +1,6 @@
 import pytest
 
+from django.contrib.auth import get_user_model
 from mixer.backend.django import mixer
 
 from core.models import (
@@ -11,15 +12,21 @@ from telegram_message_api.managers import (
 
 
 @pytest.fixture()
-def category(db):
-    return mixer.blend('core.category', name='test', aliases='test, cafe, taxi')
+def user(db):
+    user = mixer.blend(get_user_model())
+    return user
 
 
-def test_categorymanager_get_category_method(category):
+@pytest.fixture()
+def category(db, user):
+    return mixer.blend('core.category', user=user, name='test', aliases='test, cafe, taxi')
+
+
+def test_categorymanager_get_category_method(user, category):
     """Testing a CategoryManager get_category method"""
 
-    mixer.cycle(5).blend('core.category')
-    res = CategoryManager().get_category_by_aliases('test')
+    mixer.cycle(5).blend('core.category', user=mixer.blend(get_user_model(), chat_id=1234567))
+    res = CategoryManager(chat_id=user.chat_id).get_category_by_aliases('test')
 
     assert res.aliases == category.aliases
 
@@ -34,13 +41,13 @@ def test_expensemanager_add_data_method(category):
     assert res.aliases == 'code, name'
 
 
-def test_expensemanager_add_data_method(category):
+def test_expensemanager_add_data_method(user, category):
     """Testing ExpenseManager add_data method"""
 
-    ExpenseManager().add_data(text='150 test')
+    ExpenseManager(user.chat_id).add_data(text='150 test')
     res = Expense.objects.last()
 
     assert res.amount == 150
     assert res.expense_text == '150 test'
     assert res.category.name == 'test'
-
+    assert res.user == user
