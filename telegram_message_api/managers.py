@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List
-
+from django.contrib.auth import get_user_model
 from core.models import (
     Budjet, Category, Expense
 )
@@ -16,14 +16,17 @@ class DBManager(ABC):
 
 class CategoryManager(DBManager):
 
-    def __init__(self) -> None:
+    def __init__(self, chat_id: int) -> None:
+        self._chat_id = chat_id
         self._categories = self._get_all_categories()
         self._list_of_categories_for_user = self._normalize_categories()
 
     def _get_all_categories(self) -> List[Category]:
         """Return all current categories from db"""
 
-        return Category.objects.all()
+        return Category.objects.select_related(
+            'user'
+        ).filter(user=get_user_model().objects.get(chat_id=self._chat_id))
     
     def _normalize_categories(self) -> dict:
         """Normalize category data for user"""
@@ -37,6 +40,7 @@ class CategoryManager(DBManager):
     def add_data(self, codename: str, aliases: str) -> Category:
         
         Category.objects.create(
+            user=get_user_model().objects.get(chat_id=self._chat_id),
             codename=codename,
             aliases=aliases
         )
@@ -61,21 +65,22 @@ class CategoryManager(DBManager):
 
 class ExpenseManager(DBManager):
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, chat_id) -> None:
+        self._chat_id = chat_id
 
     def add_data(self, text: str) -> None:
         """Adding expense to the db"""
 
         parsed_text = ParseText(text=text)()
-        category = CategoryManager().get_category_by_aliases(parsed_text.expense)
-
+        category = CategoryManager(chat_id=self._chat_id).get_category_by_aliases(parsed_text.expense)
+        print(category.codename, category.name)
         data = CategoryData(
             category=category,
             expense_text=text
         )()
 
         Expense.objects.create(
+            user=get_user_model().objects.get(chat_id=self._chat_id),
             category=data['category'],
             amount=int(data['amount']),
             created_date=data['created'],
